@@ -1,56 +1,90 @@
-let video;
-let displaceColors;
-
-let displaceColorsSrc = `
-precision highp float;
-
-uniform sampler2D tex0;
-varying vec2 vTexCoord;
-
-vec2 zoom(vec2 coord, float amount) {
-  vec2 relativeToCenter = coord - 0.5;
-  relativeToCenter /= amount; // Zoom in
-  return relativeToCenter + 0.5; // Put back into absolute coordinates
-}
-
-void main() {
-  // Get each color channel using coordinates with different amounts
-  // of zooms to displace the colors slightly
-  gl_FragColor = vec4(
-    texture2D(tex0, vTexCoord).r,
-    texture2D(tex0, zoom(vTexCoord, 1.05)).g,
-    texture2D(tex0, zoom(vTexCoord, 1.1)).b,
-    texture2D(tex0, vTexCoord).a
-  );
-}
-`;
-
 function setup() {
-  createCanvas(700, 400, WEBGL);
-  video = createVideo(
-    'https://upload.wikimedia.org/wikipedia/commons/d/d2/DiagonalCrosswalkYongeDundas.webm'
-  );
-  video.volume(0);
-  video.hide();
-  video.loop();
-  
-  displaceColors = createFilterShader(displaceColorsSrc);
-  
-  describe(
-    'A video of a city crosswalk, with colors getting more offset the further from the center they are'
-  );
-}
+  createCanvas(710, 400);
+  pixelDensity(1);
+  describe('Colorful rendering of the Mandelbrot set.');
+  background(0);
 
-function draw() {
-  background(255);
-  push();
-  imageMode(CENTER);
-  image(
-    video,
-    0, 0, width, height,
-    0, 0, video.width, video.height,
-    COVER
-  );
-  pop();
-  filter(displaceColors);
+  // Establish a range of values on the complex plane
+  // Different width values change the zoom level
+  let w = 4;
+  let h = (w * height) / width;
+
+  // Start at negative half the width and height
+  let xMin = -w / 2;
+  let yMin = -h / 2;
+
+  // Access the pixels[] array
+  loadPixels();
+
+  // Set the maximum number of iterations for each point on the complex plane
+  let maxIterations = 100;
+
+  // x goes from xMin to xMax
+  let xMax = xMin + w;
+
+  // y goes from yMin to yMax
+  let yMax = yMin + h;
+
+  // Calculate amount we increment x,y for each pixel
+  let dx = (xMax - xMin) / width;
+  let dy = (yMax - yMin) / height;
+
+  // Start y
+  let y = yMin;
+  for (let j = 0; j < height; j += 1) {
+    // Start x
+    let x = xMin;
+    for (let i = 0; i < width; i += 1) {
+      // Test whether iteration of z = z^2 + cm diverges
+      let a = x;
+      let b = y;
+      let iterations = 0;
+      while (iterations < maxIterations) {
+        let aSquared = pow(a, 2);
+        let bSquared = pow(b, 2);
+        let twoAB = 2.0 * a * b;
+        a = aSquared - bSquared + x;
+        b = twoAB + y;
+
+        // If the values are too big, stop iteration
+        if (dist(aSquared, bSquared, 0, 0) > 16) {
+          break;
+        }
+        iterations += 1;
+      }
+
+      // Color each pixel based on how long it takes to get to infinity
+
+      let index = (i + j * width) * 4;
+
+      // Convert number of iterations to range of 0-1
+      let normalized = map(iterations, 0, maxIterations, 0, 1);
+
+      // Use square root of normalized value for color interpolation
+      let lerpAmount = sqrt(normalized);
+
+      // Set default color to black
+      let pixelColor = color(0);
+
+      // Blue
+      let startColor = color(47, 68, 159);
+
+      // Light yellow
+      let endColor = color(255, 255, 128);
+
+      // If iteration is under the maximum, interpolate a color
+      if (iterations < maxIterations) {
+        pixelColor = lerpColor(startColor, endColor, lerpAmount);
+      }
+
+      // Copy the RGBA values from the color to the pixel
+      for (let i = 0; i < 4; i += 1) {
+        pixels[index + i] = pixelColor.levels[i];
+      }
+
+      x += dx;
+    }
+    y += dy;
+  }
+  updatePixels();
 }
